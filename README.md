@@ -73,7 +73,7 @@ CMC_TIMERANGE=0
   <img src="/doc/default-screenshot-mode.jpg" />
 </p>
 
-#### Screenshot mode with custom settings (Day theme, USD, 30d)
+#### Screenshot mode with custom settings (Day theme, USD, 90d)
 <p style="text-align: center; margin: 20px auto;">
   <img src="/doc/custom-screenshot-mode.jpg" />
 </p>
