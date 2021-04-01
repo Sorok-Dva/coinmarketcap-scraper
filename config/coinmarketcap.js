@@ -4,6 +4,9 @@ const discord = require('./discord')
 const fs = require('fs')
 
 const cookiesPath = 'data/cookies'
+const balancePath = 'data/lastBalance'
+
+const lastBalance = fs.readFileSync(balancePath)
 
 async function screenshotDOMElement(opts = {}) {
   const padding = 'padding' in opts ? opts.padding : 0
@@ -36,7 +39,7 @@ const CMC = {
   browser: null,
   page: null,
   url: 'https://accounts.coinmarketcap.com/login',
-  lastBalance: null,
+  lastBalance: isNaN(parseInt(lastBalance)) ? null : parseInt(lastBalance),
   close: async () => {
     if (!CMC.browser) return true
     await CMC.browser.close().then(async () => {
@@ -139,20 +142,21 @@ const CMC = {
   getFundText: async () => {
     try {
       const balance = await CMC.page.evaluate(() => document.getElementsByClassName('price___3rj7O')[0].innerText)
-      let old = CMC.lastBalance
-      CMC.lastBalance = parseFloat(balance
-        .replace('€', '')
-        .replace(',', ''))
-
-      const textBalance = `${balance
-        .replace('€', '')
-        .replace(',', ' ')} €`
+      const currencySplit = balance.replace(',', '').split(/[-+]?[0-9]*\.?[0-9]/)
+      const currencySign = currencySplit.filter(sign => sign !== '')[0]
+      let old = CMC.lastBalance || 0
+      CMC.lastBalance = parseFloat(
+        balance
+          .replace(/€|\$|£|BTC|R\$|Fr|¥|Kč|₽/g, '')
+          .replace(',', ''),
+      )
+      fs.writeFileSync(balancePath, JSON.stringify(CMC.lastBalance))
 
       let diff = old - CMC.lastBalance
       let sign = Math.sign(diff) === 1 || 0 ? '-' : '+'
-      let diffTxt = old ? `_(**${ sign }**${ diff.toFixed(2).replace('-', '') } €)_` : ''
+      let diffTxt = old ? `_(**${sign}**${diff.toFixed(2).replace('-', '')} ${currencySign})_` : ''
 
-      discord(`${process.env.CMC_DISCORD_MSG} **${ balance }** ${ diffTxt }`)
+      discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
     } catch (e) {
       console.error('[getFundText] Error', e)
       await CMC.close()
