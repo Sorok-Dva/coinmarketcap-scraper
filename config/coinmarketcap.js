@@ -1,25 +1,25 @@
 const puppeteerOpts = require('./puppeteer').puppeteerOpts
 const puppeteer = require('puppeteer')
 const discord = require('./discord')
+const fs = require('fs')
+
+const cookiesPath = 'data/cookies'
 
 async function screenshotDOMElement(opts = {}) {
   const padding = 'padding' in opts ? opts.padding : 0
   const path = 'path' in opts ? opts.path : null
   const selector = opts.selector
 
-  if (!selector)
-    throw Error('Please provide a selector.')
+  if (!selector) throw Error('Please provide a selector.')
 
   const rect = await CMC.page.evaluate(selector => {
     const element = document.querySelector(selector)
-    if (!element)
-      return null
+    if (!element) return null
     const { x, y, width, height } = element.getBoundingClientRect()
     return { left: x, top: y, width, height, id: element.id }
   }, selector)
 
-  if (!rect)
-    throw Error(`Could not find element that matches selector: ${ selector }.`)
+  if (!rect) throw Error(`Could not find element that matches selector: ${selector}.`)
 
   return await CMC.page.screenshot({
     path: path,
@@ -41,8 +41,27 @@ const CMC = {
     if (!CMC.browser) return true
     await CMC.browser.close().then(async () => {
       CMC.browser = null
-      console.log(`Scrap finished for ${ CMC.url }`)
+      console.log(`Scrap finished for ${CMC.url}`)
     })
+  },
+  previousSession: async () => {
+    const previousSession = fs.existsSync(cookiesPath)
+    if (previousSession) {
+      const content = fs.readFileSync(cookiesPath)
+      const cookies = JSON.parse(content || '[]')
+      if (cookies.length > 0) {
+        for (let cookie of cookies) await CMC.page.setCookie(cookie)
+        console.log('Session has been loaded in the browser')
+        return true
+      }
+    }
+
+    return false
+  },
+  updateSession: async () => {
+    const cookiesObject = await CMC.page.cookies()
+    fs.writeFileSync(cookiesPath, JSON.stringify(cookiesObject))
+    console.log('Session has been saved to ' + cookiesPath)
   },
   init: async () => {
     try {
@@ -53,13 +72,18 @@ const CMC = {
       const title = await CMC.page.title()
       console.log(title)
 
-      await CMC.login()
+      const hasPreviousSession = await CMC.previousSession()
+      if (!hasPreviousSession) await CMC.login()
+
+      await CMC.page.goto('https://coinmarketcap.com/portfolio-tracker/', { waitUntil: 'networkidle2' })
+      await CMC.page.waitFor(500)
       await CMC.defineSettings()
       if (process.env.CMC_SEND_MODE === 'text') await CMC.getFundText()
       else await CMC.getFundScreenshot()
     } catch (e) {
       console.error('[INIT] Failed', e)
     } finally {
+      await CMC.updateSession()
       await CMC.close()
     }
   },
@@ -73,9 +97,9 @@ const CMC = {
         .type('input[type="password"]', process.env.CMC_PASS, { delay: 25 })
         .then(async () => console.log('Password complete'))
       await CMC.page.waitFor(100)
-      await CMC.page.click('button.ekKQHW');
-      console.log('connected')
+      await CMC.page.click('button.ekKQHW')
       await CMC.page.waitFor('body.DAY')
+      console.log('connected')
     } catch (e) {
       console.error('[login] Error', e)
       await CMC.close()
@@ -84,14 +108,14 @@ const CMC = {
   defineSettings: async () => {
     const cookies = [{
       'name': 'currency',
-      'value': process.env.CMC_CURRENCY
-      }, {
-        'name': 'cmc-theme',
-        'value': process.env.CMC_LIGHTMODE
-      }, {
-        'name': 'cmc_gdpr_hide',
-        'value': '1'
-      }]
+      'value': process.env.CMC_CURRENCY,
+    }, {
+      'name': 'cmc-theme',
+      'value': process.env.CMC_LIGHTMODE,
+    }, {
+      'name': 'cmc_gdpr_hide',
+      'value': '1',
+    }]
 
     await CMC.page.setCookie(...cookies)
     await CMC.page.goto('https://coinmarketcap.com/portfolio-tracker/', { waitUntil: 'networkidle2' })
