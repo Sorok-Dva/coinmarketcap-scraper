@@ -1,6 +1,6 @@
 {
   "name": "coinmarketcap-scraper",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A scraper built with puppeteer to retrieve your crypto assets balance on discord",
   "author": "Сорок два",
   "private": true,
