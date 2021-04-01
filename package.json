@@ -11,6 +11,7 @@
     "cron": "^1.8.2",
     "discord-bot-webhook": "^1.0.4",
     "dotenv": "^8.2.0",
+    "fs": "0.0.1-security",
     "puppeteer": "^1.11.0",
     "request": "^2.88.0"
   },
