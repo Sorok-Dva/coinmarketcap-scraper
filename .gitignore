@@ -70,3 +70,5 @@ gen
 
 # SQLite 3 db
 *.db
+
+data/
