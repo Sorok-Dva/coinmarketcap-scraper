@@ -1,12 +1,11 @@
+// TODO Discord commands bot to change parameters (e.g currency) and define custom time range execution (should be stream !)
 const puppeteerOpts = require('./puppeteer').puppeteerOpts
 const puppeteer = require('puppeteer')
 const discord = require('./discord')
 const fs = require('fs')
 
 const cookiesPath = 'data/cookies'
-const balancePath = 'data/lastBalance'
-
-const lastBalance = fs.readFileSync(balancePath)
+const balancePath = 'data/balance.json'
 
 async function screenshotDOMElement(opts = {}) {
   const padding = 'padding' in opts ? opts.padding : 0
@@ -39,7 +38,7 @@ const CMC = {
   browser: null,
   page: null,
   url: 'https://accounts.coinmarketcap.com/login',
-  lastBalance: isNaN(parseInt(lastBalance)) ? null : parseInt(lastBalance),
+  lastBalance: JSON.parse(fs.readFileSync(balancePath)),
   close: async () => {
     if (!CMC.browser) return true
     await CMC.browser.close().then(async () => {
@@ -86,6 +85,7 @@ const CMC = {
     } catch (e) {
       console.error('[INIT] Failed', e)
     } finally {
+      fs.writeFileSync(balancePath, JSON.stringify(CMC.lastBalance))
       await CMC.updateSession()
       await CMC.close()
     }
@@ -125,15 +125,19 @@ const CMC = {
   },
   getFundScreenshot: async () => {
     try {
+      // todo retrieve text funds to save into lastbalance
       // define time range settings
       await CMC.page.evaluate((timerange) => document.getElementsByClassName('kpCnDw')[0].childNodes[timerange].click(), Number(process.env.CMC_TIMERANGE))
       await CMC.page.waitFor(45000) // recalculation make take long time.
+      const time = new Date()
+      const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
+      const filname = `CMD_Result_${timeString}.png`
       await screenshotDOMElement({
-        path: 'CMCDayFund.png',
-        selector: '.lktzEZ',
+        path: filname,
+        selector: '.sDxTF', // This may changes times to time. I'm trying to find a way to avoid that
         padding: 2,
       })
-      discord('', 'CMCDayFund.png')
+      discord('', 'Crypto', filname)
     } catch (e) {
       console.error('[getFundScreenshot] Error', e)
       await CMC.close()
@@ -144,17 +148,14 @@ const CMC = {
       const balance = await CMC.page.evaluate(() => document.getElementsByClassName('price___3rj7O')[0].innerText)
       const currencySplit = balance.replace(',', '').split(/[-+]?[0-9]*\.?[0-9]/)
       const currencySign = currencySplit.filter(sign => sign !== '')[0]
-      let old = CMC.lastBalance || 0
-      CMC.lastBalance = parseFloat(
-        balance
-          .replace(/€|\$|£|BTC|R\$|Fr|¥|Kč|₽/g, '')
+      CMC.lastBalance.total.current = parseFloat(
+        balance.replace(/€|\$|£|BTC|R\$|Fr|¥|Kč|₽/g, '')
           .replace(',', ''),
       )
-      fs.writeFileSync(balancePath, JSON.stringify(CMC.lastBalance))
 
-      let diff = old - CMC.lastBalance
+      let diff = CMC.lastBalance.total.last - CMC.lastBalance.total.current
       let sign = Math.sign(diff) === 1 || 0 ? '-' : '+'
-      let diffTxt = old ? `_(**${sign}**${diff.toFixed(2).replace('-', '')} ${currencySign})_` : ''
+      let diffTxt = CMC.lastBalance.total.last ? `_(**${sign}**${diff.toFixed(2).replace('-', '')} ${currencySign})_` : ''
 
       discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
     } catch (e) {
