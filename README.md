@@ -3,6 +3,7 @@
 </p>
 
 # CoinMarketCap Scraper
+_Actually **outdated**, see this [issue](https://github.com/Sorok-Dva/coinmarketcap-scraper/issues/1)_
 
 ## Description
 This application is a scraper built with puppeteer that will send on discord your crypto assets balance with screenshot or simply with text.
