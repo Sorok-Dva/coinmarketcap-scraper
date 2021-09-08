@@ -170,7 +170,8 @@ const CMC = {
         path: filname,
         selector,
       })
-      await discord('', filname)
+      discord('_The preview may be unreadable as it, just open the image in your browser so you will be able to zoom and perfectly read your assets list_', filname)
+      if (process.env.CMC_SEND_ASSETS_LIST === 'true') await CMC.getAssetsScreenshot()
     } catch (e) {
       console.error('[getFundScreenshot] Error', e)
       await CMC.close()
@@ -223,7 +224,7 @@ const CMC = {
       let sign = Math.sign(diff) === 1 || 0 ? '-' : '+'
       let diffTxt = CMC.lastBalance.total.last ? `_(**${sign}**${diff.toFixed(2).replace('-', '')} ${currencySign})_` : ''
 
-      discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
+      await discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
     } catch (e) {
       console.error('[getFundText] Error', e)
       await CMC.close()
