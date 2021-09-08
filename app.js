@@ -11,7 +11,7 @@ const fs = require('fs')
 const dataDir = './data'
 const screensDir = './data/screenshots/'
 const cookiesFile = './data/cookies'
-const localStorageFile = 'data/storage'
+const localStorageFile = './data/storage'
 const balancesFile = './data/balance.json'
 
 const initialization = () => {
@@ -22,13 +22,12 @@ const initialization = () => {
     }
   }
   if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, 0o744)
-  if (!fs.existsSync(localStorageFile)) fs.mkdirSync(localStorageFile, 0o744)
   if (!fs.existsSync(screensDir)) fs.mkdirSync(screensDir, 0o744)
-  fs.writeFile(cookiesFile, '[]', { flag: 'wx' },(err) => {
+  fs.writeFile(cookiesFile, '{"value":{}}', { flag: 'wx' },(err) => {
     if (err) console.info('cookies directory already set')
     else console.log('cookies wasnt created. It\'s now done !')
   })
-  fs.writeFile(cookiesFile, '[]', { flag: 'wx' },(err) => {
+  fs.writeFile(localStorageFile, '[]', { flag: 'wx' },(err) => {
     if (err) console.info('local storage already set')
     else console.log('local storage wasnt created. It\'s now done but its empty. Fill the storage file.')
   })

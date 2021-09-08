@@ -4,11 +4,11 @@ const puppeteer = require('puppeteer')
 const discord = require('./discord')
 const fs = require('fs')
 
-const cookiesPath = 'data/cookies/cmc'
-const localStoragePath = 'data/storage/cmc'
+const cookiesPath = 'data/cookies'
+const localStoragePath = 'data/storage'
 const balancePath = 'data/balance.json'
 
-async function screenshotDOMElement(opts = {}) {
+const screenshotDOMElement = async (opts = {}) => {
   const element = await CMC.page.$(opts.selector)
   const box = await element.boundingBox()
   const x = box['x']
@@ -22,7 +22,7 @@ const CMC = {
   browser: null,
   page: null,
   url: 'https://coinmarketcap.com/portfolio-tracker/',
-  lastBalance: JSON.parse(fs.readFileSync(balancePath)),
+  lastBalance: JSON.parse(fs.readFileSync(balancePath, 'utf-8')),
   previousSession: async () => {
     const previousSession = fs.existsSync(cookiesPath)
     if (previousSession) {
@@ -147,9 +147,11 @@ const CMC = {
     try {
       // todo retrieve text funds to save into lastbalance
       // define time range settings
-      await CMC.page.evaluate((timerange) => document.getElementsByClassName('knwQRw')[0].childNodes[timerange].click(), Number(process.env.CMC_TIMERANGE))
-      await CMC.page.waitFor(45000) // recalculation make take long time.
-      await CMC.page.waitForSelector('div.etxuvz-1', { hidden: true }) // fkjyvf
+      const [timeRange] = await CMC.page.$x(`//span[contains(., '${process.env.CMC_TIMERANGE}')]`);
+      if (timeRange) {
+        await timeRange.click()
+        await CMC.page.waitForFunction(() => document.querySelector("body").innerText.includes("Recalculating") === false)
+      }
       const time = new Date()
       const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
       const filname = `data/screenshots/CMC_Result_${timeString}.png`
@@ -168,7 +170,7 @@ const CMC = {
         path: filname,
         selector,
       })
-      await discord('', 'Crypto', filname)
+      await discord('', filname)
     } catch (e) {
       console.error('[getFundScreenshot] Error', e)
       await CMC.close()
@@ -177,7 +179,7 @@ const CMC = {
   getAssetsScreenshot: async () => {
     try {
       await CMC.deleteLeftNode()
-      await CMC.page.waitForTimeout(20000)
+      await CMC.page.waitForTimeout(2500)
       const time = new Date()
       const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
       const filname = `data/screenshots/CMC_Assets_${timeString}.png`
@@ -196,7 +198,7 @@ const CMC = {
         path: filname,
         selector,
       })
-      await discord('', 'Crypto', filname)
+      await discord('', filname)
     } catch (e) {
       console.error('[getFundScreenshot] Error', e)
       await CMC.close()
@@ -207,9 +209,7 @@ const CMC = {
       const [timeRange] = await CMC.page.$x(`//span[contains(., '${process.env.CMC_TIMERANGE}')]`);
       if (timeRange) {
         await timeRange.click()
-        await CMC.page.waitForFunction(
-          'document.querySelector("body").innerText.includes("Recalculating")'
-        )
+        await CMC.page.waitForFunction(() => document.querySelector("body").innerText.includes("Recalculating") === false)
       }
       const balance = await CMC.page.evaluate(() => document.getElementsByClassName('sc-9p9hwv-0')[0].innerText)
       const currencySplit = balance.replace(',', '').split(/[-+]?[0-9]*\.?[0-9]/)
@@ -223,7 +223,7 @@ const CMC = {
       let sign = Math.sign(diff) === 1 || 0 ? '-' : '+'
       let diffTxt = CMC.lastBalance.total.last ? `_(**${sign}**${diff.toFixed(2).replace('-', '')} ${currencySign})_` : ''
 
-      await discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
+      discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
     } catch (e) {
       console.error('[getFundText] Error', e)
       await CMC.close()
