@@ -1,7 +1,7 @@
 {
   "name": "coinmarketcap-scraper",
-  "version": "0.1.0",
-  "description": "A scraper built with puppeteer to retrieve your crypto assets balance on discord",
+  "version": "0.1.1",
+  "description": "A scraper built with puppeteer to retrieve your crypto assets balance / list on discord",
   "author": "Сорок два",
   "private": true,
   "scripts": {
@@ -12,7 +12,7 @@
     "discord-bot-webhook": "^1.0.4",
     "dotenv": "^8.2.0",
     "fs": "0.0.1-security",
-    "puppeteer": "^1.11.0",
+    "puppeteer": "^10.2.0",
     "request": "^2.88.0"
   },
   "main": "app.js"

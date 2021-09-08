@@ -19,7 +19,7 @@ const discord = {
       formData.file = {
         'value': fs.createReadStream(process.cwd() + '/' + file),
           'options': {
-          'filename': 'coinmarketcap.png',
+          'filename': file.filename,
             'contentType': null
         }
       }

@@ -4,48 +4,25 @@ const puppeteer = require('puppeteer')
 const discord = require('./discord')
 const fs = require('fs')
 
-const cookiesPath = 'data/cookies'
+const cookiesPath = 'data/cookies/cmc'
+const localStoragePath = 'data/storage/cmc'
 const balancePath = 'data/balance.json'
 
 async function screenshotDOMElement(opts = {}) {
-  const padding = 'padding' in opts ? opts.padding : 0
-  const path = 'path' in opts ? opts.path : null
-  const selector = opts.selector
-
-  if (!selector) throw Error('Please provide a selector.')
-
-  const rect = await CMC.page.evaluate(selector => {
-    const element = document.querySelector(selector)
-    if (!element) return null
-    const { x, y, width, height } = element.getBoundingClientRect()
-    return { left: x, top: y, width, height, id: element.id }
-  }, selector)
-
-  if (!rect) throw Error(`Could not find element that matches selector: ${selector}.`)
-
-  return await CMC.page.screenshot({
-    path: path,
-    clip: {
-      x: rect.left - padding,
-      y: rect.top - padding,
-      width: rect.width,
-      height: rect.height,
-    },
-  })
+  const element = await CMC.page.$(opts.selector)
+  const box = await element.boundingBox()
+  const x = box['x']
+  const y = box['y']
+  const w = box['width'] + 15
+  const h = box['height']
+  await element.screenshot({ path: opts.path, 'clip': {'x': x, 'y': y, 'width': w, 'height': h} });
 }
 
 const CMC = {
   browser: null,
   page: null,
-  url: 'https://accounts.coinmarketcap.com/login',
+  url: 'https://coinmarketcap.com/portfolio-tracker/',
   lastBalance: JSON.parse(fs.readFileSync(balancePath)),
-  close: async () => {
-    if (!CMC.browser) return true
-    await CMC.browser.close().then(async () => {
-      CMC.browser = null
-      console.log(`Scrap finished for ${CMC.url}`)
-    })
-  },
   previousSession: async () => {
     const previousSession = fs.existsSync(cookiesPath)
     if (previousSession) {
@@ -57,7 +34,7 @@ const CMC = {
         return true
       }
     }
-
+    await CMC.page.reload()
     return false
   },
   updateSession: async () => {
@@ -65,22 +42,27 @@ const CMC = {
     fs.writeFileSync(cookiesPath, JSON.stringify(cookiesObject))
     console.log('Session has been saved to ' + cookiesPath)
   },
+  close: async () => {
+    if (!CMC.browser) return true
+    await CMC.browser.close().then(async () => {
+      CMC.browser = null
+      console.log(`Scrap finished for ${CMC.url}`)
+    })
+  },
   init: async () => {
     try {
       CMC.browser = await puppeteer.launch(puppeteerOpts)
-      CMC.page = await CMC.browser.newPage()
-      await CMC.page.goto(CMC.url, { waitUntil: 'networkidle2' })
-
+      CMC.page = (await CMC.browser.pages())[0]
+      await CMC.page.setViewport({ width: 1900, height: 1000, deviceScaleFactor: 1 })
+      await CMC.page.goto(CMC.url, { waitUntil: 'networkidle0' })
       const title = await CMC.page.title()
       console.log(title)
 
-      const hasPreviousSession = await CMC.previousSession()
-      if (!hasPreviousSession) await CMC.login()
-
-      await CMC.page.goto('https://coinmarketcap.com/portfolio-tracker/', { waitUntil: 'networkidle2' })
-      await CMC.page.waitFor(500)
       await CMC.defineSettings()
+      await CMC.initSession('Log In')
+      await CMC.page.waitForTimeout(5000) // new changes on CMC show the homepage for few ms
       if (process.env.CMC_SEND_MODE === 'text') await CMC.getFundText()
+      else if (process.env.CMC_SEND_MODE === 'true') await CMC.getAssetsScreenshot()
       else await CMC.getFundScreenshot()
     } catch (e) {
       console.error('[INIT] Failed', e)
@@ -90,23 +72,19 @@ const CMC = {
       await CMC.close()
     }
   },
-  login: async () => {
-    try {
-      await CMC.page
-        .type('input[type="email"]', process.env.CMC_LOGIN, { delay: 25 })
-        .then(async () => console.log('Username complete'))
-      await CMC.page.waitFor(500)
-      await CMC.page
-        .type('input[type="password"]', process.env.CMC_PASS, { delay: 25 })
-        .then(async () => console.log('Password complete'))
-      await CMC.page.waitFor(100)
-      await CMC.page.click('button.ekKQHW')
-      await CMC.page.waitFor('body.DAY')
-      console.log('connected')
-    } catch (e) {
-      console.error('[login] Error', e)
-      await CMC.close()
-    }
+  initSession: async (text) => {
+    console.log('initSession')
+    const hasPreviousSession = await CMC.previousSession()
+    if (!hasPreviousSession) await CMC.popupLogin(text)
+
+    const localStorageData = fs.readFileSync(localStoragePath, 'utf8')
+    const ls = JSON.parse(localStorageData || '[{"u": "undefined"}]')
+    await CMC.page.evaluate((ls) => {
+      console.log('set storage')
+      localStorage.clear()
+      localStorage.setItem('u', JSON.stringify(ls))
+    }, ls);
+    await CMC.page.reload()
   },
   defineSettings: async () => {
     const cookies = [{
@@ -121,23 +99,104 @@ const CMC = {
     }]
 
     await CMC.page.setCookie(...cookies)
-    await CMC.page.goto('https://coinmarketcap.com/portfolio-tracker/', { waitUntil: 'networkidle2' })
+  },
+  completLoginForm: async () => {
+    await CMC.page
+      .type('input[type="email"]', process.env.CMC_LOGIN, { delay: 25 })
+      .then(async () => console.info('Username complete'))
+    await CMC.page.waitForTimeout(500)
+    await CMC.page
+      .type('input[type="password"]', process.env.CMC_PASS, { delay: 25 })
+      .then(async () => console.info('Password complete'))
+    await CMC.page.waitForTimeout(2000)
+  },
+  popupLogin: async (text) => {
+    try {
+      const [button] = await CMC.page.$x(`//button[contains(., '${text}')]`);
+      if (button) {
+        await button.click()
+        await CMC.page.waitForSelector('input[type="email"]')
+        await CMC.completLoginForm()
+        await CMC.page.keyboard.press('Enter')
+        await CMC.page.waitForFunction(
+          'document.querySelector("body").innerText.includes("You have successfully logged in!")'
+        )
+      }
+      console.info('connected')
+    } catch (e) {
+      console.error('[login] Error', e)
+      await CMC.close()
+    }
+  },
+  deleteLeftNode: async () => {
+    const xpath = "//span[contains(text(),'My Main Portfolio')]";
+    await CMC.page.evaluate(xpath => {
+      const node = document.evaluate(
+        xpath,
+        document,
+        null,
+        XPathResult.FIRST_ORDERED_NODE_TYPE,
+        null
+      ).singleNodeValue
+        .parentNode.parentNode.parentNode.parentNode.parentNode
+        .parentNode.parentNode.parentNode.parentNode // 😯 lot of parentNode, should find another way
+      node.remove()
+    }, xpath)
   },
   getFundScreenshot: async () => {
     try {
       // todo retrieve text funds to save into lastbalance
       // define time range settings
-      await CMC.page.evaluate((timerange) => document.getElementsByClassName('kpCnDw')[0].childNodes[timerange].click(), Number(process.env.CMC_TIMERANGE))
+      await CMC.page.evaluate((timerange) => document.getElementsByClassName('knwQRw')[0].childNodes[timerange].click(), Number(process.env.CMC_TIMERANGE))
       await CMC.page.waitFor(45000) // recalculation make take long time.
+      await CMC.page.waitForSelector('div.etxuvz-1', { hidden: true }) // fkjyvf
       const time = new Date()
       const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
-      const filname = `CMD_Result_${timeString}.png`
+      const filname = `data/screenshots/CMC_Result_${timeString}.png`
+      const xpath = "//span[contains(text(),'Current Balance')]";
+      const nodeClasses = await CMC.page.evaluate(xpath => {
+        return document.evaluate(
+          xpath,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        ).singleNodeValue.parentNode.parentNode.parentNode.classList
+      }, xpath)
+      const selector = `.${nodeClasses[1]}` // first element seems to be generic and used in other places
       await screenshotDOMElement({
         path: filname,
-        selector: '.sDxTF', // This may changes times to time. I'm trying to find a way to avoid that
-        padding: 2,
+        selector,
       })
-      discord('', 'Crypto', filname)
+      await discord('', 'Crypto', filname)
+    } catch (e) {
+      console.error('[getFundScreenshot] Error', e)
+      await CMC.close()
+    }
+  },
+  getAssetsScreenshot: async () => {
+    try {
+      await CMC.deleteLeftNode()
+      await CMC.page.waitForTimeout(20000)
+      const time = new Date()
+      const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
+      const filname = `data/screenshots/CMC_Assets_${timeString}.png`
+      const xpath = "//p[contains(text(),'Your Assets')]";
+      const nodeClasses = await CMC.page.evaluate(xpath => {
+        return document.evaluate(
+          xpath,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        ).singleNodeValue.parentNode.parentNode.classList
+      }, xpath)
+      const selector = `.${nodeClasses[0]}`
+      await screenshotDOMElement({
+        path: filname,
+        selector,
+      })
+      await discord('', 'Crypto', filname)
     } catch (e) {
       console.error('[getFundScreenshot] Error', e)
       await CMC.close()
@@ -145,7 +204,14 @@ const CMC = {
   },
   getFundText: async () => {
     try {
-      const balance = await CMC.page.evaluate(() => document.getElementsByClassName('price___3rj7O')[0].innerText)
+      const [timeRange] = await CMC.page.$x(`//span[contains(., '${process.env.CMC_TIMERANGE}')]`);
+      if (timeRange) {
+        await timeRange.click()
+        await CMC.page.waitForFunction(
+          'document.querySelector("body").innerText.includes("Recalculating")'
+        )
+      }
+      const balance = await CMC.page.evaluate(() => document.getElementsByClassName('sc-9p9hwv-0')[0].innerText)
       const currencySplit = balance.replace(',', '').split(/[-+]?[0-9]*\.?[0-9]/)
       const currencySign = currencySplit.filter(sign => sign !== '')[0]
       CMC.lastBalance.total.current = parseFloat(
@@ -157,7 +223,7 @@ const CMC = {
       let sign = Math.sign(diff) === 1 || 0 ? '-' : '+'
       let diffTxt = CMC.lastBalance.total.last ? `_(**${sign}**${diff.toFixed(2).replace('-', '')} ${currencySign})_` : ''
 
-      discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
+      await discord(`${process.env.CMC_DISCORD_MSG} **${balance}** ${diffTxt}`)
     } catch (e) {
       console.error('[getFundText] Error', e)
       await CMC.close()

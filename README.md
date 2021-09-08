@@ -13,7 +13,7 @@ If you don't have a dedicated server that is always on, consider using [Heroku](
 
 ### Prerequisites
 
-- `node` >= 11
+- `node` >= v11.7
 - `npm`
 - `pm2`
 
@@ -40,7 +40,8 @@ CMC_CRONJOB="44 11 * * *"
 CMC_SEND_MODE="screenshot"
 CMC_CURRENCY="EUR"
 CMC_LIGHTMODE="night"
-CMC_TIMERANGE=0
+CMC_TIMERANGE=24H
+CMC_SEND_ASSETS_LIST=true
 ```
 
 - **CHROME_PATH**: The path to a chromium browser used by puppeteer
@@ -53,7 +54,8 @@ CMC_TIMERANGE=0
 - **CMC_SEND_MODE**: Which format to use to send balance on discord. `text` or `screenshot` _1_
 - **CMC_CURRENCY**: Currency to use (default to `EUR`)
 - **CMC_LIGHTMODE**: Website theme to use for the screenshot (`day` or `night`)
-- **CMC_TIMERANGE**: Time range to use for the screenshot. `0` = 24h | `1` = 7d | `2` = 30d | `3` = 90d | `4` = All.
+- **CMC_TIMERANGE**: Time range to use for the screenshot. (Format: `24H` | `7D` | `30D` | `90D` | `ALL` - it's case-sensitive)
+- **CMC_SEND_ASSETS_LIST**: Send your complete assets list as screen. (`true` or `false`)
 
  _1_ : If you set the `CMC_SEND_MODE` to `text`, you'll have a diff with the previous captured balance. Maybe useful for automatic short time range scraping. See examples.
 
