@@ -15,7 +15,7 @@ const screenshotDOMElement = async (opts = {}) => {
   const y = box['y']
   const w = box['width'] + 15
   const h = box['height']
-  await element.screenshot({ path: opts.path, 'clip': {'x': x, 'y': y, 'width': w, 'height': h} });
+  await element.screenshot({ path: opts.path, 'clip': { 'x': x, 'y': y, 'width': w, 'height': h } })
 }
 
 const CMC = {
@@ -83,7 +83,7 @@ const CMC = {
       console.log('set storage')
       localStorage.clear()
       localStorage.setItem('u', JSON.stringify(ls))
-    }, ls);
+    }, ls)
     await CMC.page.reload()
   },
   defineSettings: async () => {
@@ -91,8 +91,8 @@ const CMC = {
       'name': 'currency',
       'value': process.env.CMC_CURRENCY,
     }, {
-      'name': 'cmc-theme',
-      'value': process.env.CMC_LIGHTMODE,
+      'name': process.env.CMC_LIGHTMODE,
+      'value': 'night',
     }, {
       'name': 'cmc_gdpr_hide',
       'value': '1',
@@ -101,18 +101,22 @@ const CMC = {
     await CMC.page.setCookie(...cookies)
   },
   completLoginForm: async () => {
-    await CMC.page
-      .type('input[type="email"]', process.env.CMC_LOGIN, { delay: 25 })
-      .then(async () => console.info('Username complete'))
-    await CMC.page.waitForTimeout(500)
-    await CMC.page
-      .type('input[type="password"]', process.env.CMC_PASS, { delay: 25 })
-      .then(async () => console.info('Password complete'))
-    await CMC.page.waitForTimeout(2000)
+    try {
+      await CMC.page
+        .type('input[type="email"]', process.env.CMC_LOGIN, { delay: 25 })
+        .then(async () => console.log('Username complete'))
+      await CMC.page.waitForTimeout(500)
+      await CMC.page
+        .type('input[type="password"]', process.env.CMC_PASS, { delay: 25 })
+        .then(async () => console.log('Password complete'))
+      await CMC.page.waitForTimeout(2000)
+    } catch (e) {
+      log('[completLoginForm] Error', e)
+    }
   },
   popupLogin: async (text) => {
     try {
-      const [button] = await CMC.page.$x(`//button[contains(., '${text}')]`);
+      const [button] = await CMC.page.$x(`//button[contains(., '${text}')]`)
       if (button) {
         await button.click()
         await CMC.page.waitForSelector('input[type="email"]')
@@ -125,11 +129,10 @@ const CMC = {
       console.info('connected')
     } catch (e) {
       console.error('[login] Error', e)
-      await CMC.close()
     }
   },
   deleteLeftNode: async () => {
-    const xpath = "//span[contains(text(),'My Main Portfolio')]";
+    const xpath = `//span[contains(text(),'My Main Portfolio')]`
     await CMC.page.evaluate(xpath => {
       const node = document.evaluate(
         xpath,
@@ -150,12 +153,12 @@ const CMC = {
       const [timeRange] = await CMC.page.$x(`//span[contains(., '${process.env.CMC_TIMERANGE}')]`);
       if (timeRange) {
         await timeRange.click()
-        await CMC.page.waitForFunction(() => document.querySelector("body").innerText.includes("Recalculating") === false)
+        await CMC.page.waitForFunction(() => document.querySelector("body").innerText.includes('Recalculating') === false)
       }
       const time = new Date()
       const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
       const filname = `data/screenshots/CMC_Result_${timeString}.png`
-      const xpath = "//span[contains(text(),'Current Balance')]";
+      const xpath = `//span[contains(text(),'Current Balance')]`
       const nodeClasses = await CMC.page.evaluate(xpath => {
         return document.evaluate(
           xpath,
@@ -170,11 +173,10 @@ const CMC = {
         path: filname,
         selector,
       })
-      discord('_The preview may be unreadable as it, just open the image in your browser so you will be able to zoom and perfectly read your assets list_', filname)
+      discord('', filname)
       if (process.env.CMC_SEND_ASSETS_LIST === 'true') await CMC.getAssetsScreenshot()
     } catch (e) {
-      console.error('[getFundScreenshot] Error', e)
-      await CMC.close()
+      console.log('[getFundScreenshot] Error', e)
     }
   },
   getAssetsScreenshot: async () => {
@@ -184,7 +186,7 @@ const CMC = {
       const time = new Date()
       const timeString = `${time.getDate()}-${time.getMonth()}-${time.getFullYear()}`
       const filname = `data/screenshots/CMC_Assets_${timeString}.png`
-      const xpath = "//p[contains(text(),'Your Assets')]";
+      const xpath = `//p[contains(text(),'Your Assets')]`
       const nodeClasses = await CMC.page.evaluate(xpath => {
         return document.evaluate(
           xpath,
@@ -199,10 +201,9 @@ const CMC = {
         path: filname,
         selector,
       })
-      await discord('', filname)
+      discord('_The preview may be unreadable as it, just open the image in your browser so you will be able to zoom and perfectly read your assets list_', filname)
     } catch (e) {
-      console.error('[getFundScreenshot] Error', e)
-      await CMC.close()
+      console.log('[getAssetsScreenshot] Error', e)
     }
   },
   getFundText: async () => {
